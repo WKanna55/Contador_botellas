@@ -4,6 +4,7 @@ import serial
 from PIL import Image, ImageTk
 import threading
 import re
+import time
 
 class ContadorBotellasApp:
     def __init__(self, ventana):
@@ -14,6 +15,9 @@ class ContadorBotellasApp:
         
         self.tamano_fuente_numero = 0.45
         self.cifras = 2
+        
+        self.ser = None  # Inicializa la variable ser
+
         
         self.ventana = ventana
         self.ventana.attributes('-fullscreen', True)
@@ -104,9 +108,12 @@ class ContadorBotellasApp:
         self.ventana.bind("<KeyPress-x>", lambda event: self.cerrar_aplicacion())
 
     def cerrar_aplicacion(self):
-        if ser and ser.is_open:
-            ser.close()
+        if self.ser and self.ser.is_open:
+            self.ser.close()
         self.ventana.destroy()
+        
+    def set_serial_connection(self, ser):
+        self.ser = ser
         
     def cambiar_tamano_fuente(self):
         self.tamano_fuente_numero = self.tamano_fuente_numero * 0.8
@@ -114,55 +121,62 @@ class ContadorBotellasApp:
         self.cifras += 1
 
 
+def intentar_conexion_serial(puerto, baudrate, app):
+    """Función para intentar conectarse al puerto serial repetidamente."""
+    while True:
+        try:
+            ser = serial.Serial(puerto, baudrate, timeout=1)
+            print(f"Conexión exitosa al puerto {puerto}")
+            app.set_serial_connection(ser)  # Actualiza la referencia en la app
+            recibir_datos_serial(ser, app)
+        except serial.SerialException as e:
+            print(f"Error al abrir el puerto serial {puerto}: {e}")
+            print("Reintentando en 5 segundos...")
+            time.sleep(5)
+
 def recibir_datos_serial(ser, app):
     """Función para recibir datos seriales y actualizar el contador."""
     while True:
-        if ser.in_waiting > 0:
-            linea = ser.readline().decode('utf-8').rstrip()
-            print(f"Recibido: {linea}")
-            
-            # Separar la línea en etiqueta y número
-            partes = linea.split(':')
-            etiqueta = partes[0].strip()
-            numero = partes[1].strip()
-            
-            print("etiqueta:", etiqueta)
-            print("numero:", numero)
-            
-            
-            # Actualizar el contador si la etiqueta es "CUENTA" y el número es un dígito
-            if etiqueta == "CUENTA" and re.match(r"\d+", numero):
+        try:
+            if ser.in_waiting > 0:
+                linea = ser.readline().decode('utf-8').rstrip()
+                print(f"Recibido: {linea}")
                 
-                if len(numero) >= app.cifras:
-                    print("Hola deberia cambiar")
-                    app.cambiar_tamano_fuente()
+                # Separar la línea en etiqueta y número
+                partes = linea.split(':')
+                if len(partes) == 2:
+                    etiqueta = partes[0].strip()
+                    numero = partes[1].strip()
                     
-                app.cambiar_contador(numero)
-                
+                    print("etiqueta:", etiqueta)
+                    print("numero:", numero)
+                    
+                    # Actualizar el contador si la etiqueta es "CUENTA" y el número es un dígito
+                    if etiqueta == "CUENTA" and re.match(r"\d+", numero):
+                        if len(numero) >= app.cifras:
+                            print("Hola debería cambiar")
+                            app.cambiar_tamano_fuente()
+                        
+                        app.cambiar_contador(numero)
+        except serial.SerialException:
+            print("Conexión serial perdida. Reiniciando...")
+            break
+
+def iniciar_conexion_serial(puerto, baudrate, app):
+    """Función para iniciar el hilo de conexión serial."""
+    hilo_serial = threading.Thread(target=intentar_conexion_serial, args=(puerto, baudrate, app))
+    hilo_serial.daemon = True
+    hilo_serial.start()
 
 if __name__ == "__main__":
-    try:
-        # Abrir el puerto serial
-        ser = serial.Serial('COM7', 9600)
-        
-        # Crear la ventana principal de Tkinter
-        ventana_principal = tk.Tk()
-        
-        # Inicializar la aplicación del contador de botellas
-        app = ContadorBotellasApp(ventana_principal)
-        
-        # Crear un hilo para la recepción de datos seriales
-        hilo_serial = threading.Thread(target=recibir_datos_serial, args=(ser, app))
-        hilo_serial.daemon = True
-        hilo_serial.start()
-        
-        # Iniciar el bucle principal de la interfaz gráfica
-        ventana_principal.mainloop()
+    # Crear la ventana principal de Tkinter
+    ventana_principal = tk.Tk()
     
-    except serial.SerialException as e:
-        print(f"Error al abrir el puerto serial: {e}")
+    # Inicializar la aplicación del contador de botellas
+    app = ContadorBotellasApp(ventana_principal)
     
-    finally:
-        # Cerrar el puerto serial al salir
-        if ser and ser.is_open:
-            ser.close()
+    # Iniciar la conexión serial en un hilo separado
+    iniciar_conexion_serial('COM7', 9600, app)
+    
+    # Iniciar el bucle principal de la interfaz gráfica
+    ventana_principal.mainloop()
