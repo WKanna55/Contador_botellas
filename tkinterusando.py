@@ -17,8 +17,15 @@ class ContadorBotellasApp:
         self.cifras = 2
         
         self.ser = None  # Inicializa la variable ser
-
         
+        self.timer_id = None
+        self.tiempo_inactividad = 15000  # 10 s en milisegundos
+        
+        self.iniciado_con_mostrar = False
+        self.mensaje_bienvenida = None
+        self.parpadeo_activo = False
+        self.pantalla_activa = False
+
         self.ventana = ventana
         self.ventana.attributes('-fullscreen', True)
         self.ventana.title("Contador de Botellas")
@@ -71,6 +78,8 @@ class ContadorBotellasApp:
         # Actualizar el contador y crear botones
         self.actualizar_contador()
         self.crear_botones()
+        # Ocultar la interfaz al inicio
+        self.ocultar_interfaz()
 
     def actualizar_contador(self):
         self.etiqueta_contador.config(text=self.contador, font=self.fuente_contador)
@@ -78,8 +87,11 @@ class ContadorBotellasApp:
 
     def cambiar_contador(self, num):
         self.contador = num
+        if self.parpadeo_activo:
+            self.ocultar_mensaje_bienvenida()
+            self.marco_principal.place(relx=0.02, rely=0.02, relwidth=0.95, relheight=0.95)
         self.mostrar_animacion_botella()
-        self.ventana.after(500, self.ocultar_animacion_botella)  # Ocultar después de 3 segundos
+        self.ventana.after(500, self.ocultar_animacion_botella)
 
     def mostrar_animacion_botella(self):
         # Ocultar el contador actual
@@ -99,12 +111,6 @@ class ContadorBotellasApp:
         self.etiqueta_contador.place(relx=0.5, rely=0.5, anchor="center")
 
     def crear_botones(self):
-        #boton_size = int(self.alto_pantalla * 0.02)  # Tamaño dinámico para el botón
-        #self.boton_cerrar = tk.Button(self.frame_derecha, text="Cerrar", 
-        #                              command=self.cerrar_aplicacion, 
-        #                              font=('Arial', boton_size))
-        #self.boton_cerrar.place(relx=0.5, rely=0.95, anchor="s")
-        #
         self.ventana.bind("<KeyPress-x>", lambda event: self.cerrar_aplicacion())
 
     def cerrar_aplicacion(self):
@@ -119,6 +125,57 @@ class ContadorBotellasApp:
         self.tamano_fuente_numero = self.tamano_fuente_numero * 0.8
         self.fuente_contador.configure(size=int(self.alto_pantalla * self.tamano_fuente_numero))
         self.cifras += 1
+        
+    def ocultar_interfaz(self):
+        self.marco_principal.place_forget()
+        self.ventana.configure(bg="black")
+        self.pantalla_activa = False
+
+    def mostrar_interfaz(self):
+        if not self.pantalla_activa:
+            self.ventana.configure(bg="gray")
+            if self.iniciado_con_mostrar:
+                self.mostrar_mensaje_bienvenida()
+            else:
+                self.marco_principal.place(relx=0.02, rely=0.02, relwidth=0.95, relheight=0.95)
+            self.reiniciar_temporizador()
+            self.pantalla_activa = True
+                
+    def reiniciar_temporizador(self):
+        if self.timer_id:
+            self.ventana.after_cancel(self.timer_id)
+        self.timer_id = self.ventana.after(self.tiempo_inactividad, self.ocultar_interfaz)
+
+    def actividad_detectada(self):
+        self.reiniciar_temporizador()
+        self.mostrar_interfaz()
+        
+    def mostrar_mensaje_bienvenida(self):
+        # Crear un nuevo frame que cubra toda la pantalla
+        self.frame_bienvenida = tk.Frame(self.ventana, bg="darkgray")
+        self.frame_bienvenida.place(relx=0, rely=0, relwidth=1, relheight=1)
+
+        if not self.mensaje_bienvenida:
+            self.mensaje_bienvenida = tk.Label(self.frame_bienvenida, 
+                                               text="¡Hola!\nIngrese botella por favor", 
+                                               font=self.fuente_titulo, 
+                                               fg="darkred", 
+                                               bg="darkgray")
+        self.mensaje_bienvenida.place(relx=0.5, rely=0.5, anchor="center")
+        self.parpadeo_activo = True
+        self.parpadear_mensaje()
+
+    def parpadear_mensaje(self):
+        if self.parpadeo_activo:
+            current_color = self.mensaje_bienvenida.cget("fg")
+            new_color = "darkgray" if current_color == "darkred" else "darkred"
+            self.mensaje_bienvenida.config(fg=new_color)
+            self.ventana.after(500, self.parpadear_mensaje)
+
+    def ocultar_mensaje_bienvenida(self):
+        if self.mensaje_bienvenida:
+            self.frame_bienvenida.place_forget()
+        self.parpadeo_activo = False
 
 
 def intentar_conexion_serial(puerto, baudrate, app):
@@ -133,14 +190,23 @@ def intentar_conexion_serial(puerto, baudrate, app):
             print(f"Error al abrir el puerto serial {puerto}: {e}")
             print("Reintentando en 5 segundos...")
             time.sleep(5)
+            
 
 def recibir_datos_serial(ser, app):
-    """Función para recibir datos seriales y actualizar el contador."""
     while True:
         try:
             if ser.in_waiting > 0:
                 linea = ser.readline().decode('utf-8').rstrip()
                 print(f"Recibido: {linea}")
+                
+                if linea.strip().lower() == "mostrar":
+                    if not app.pantalla_activa:
+                        app.iniciado_con_mostrar = True
+                        app.ventana.after(0, app.actividad_detectada)
+                    continue
+                
+                # Reiniciar el temporizador y mostrar la interfaz
+                app.ventana.after(0, app.actividad_detectada)
                 
                 # Separar la línea en etiqueta y número
                 partes = linea.split(':')

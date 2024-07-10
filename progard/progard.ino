@@ -3,10 +3,16 @@ void setup(){
 }
 
 void loop(){
-  for (int i = 0; i<1000; i++){
+  for (int i = 1; i<1000; i++){
 
     Serial.print("CUENTA: ");
     Serial.println(i);
-    delay(1000);
+    Serial.println("mostrar");
+    delay(2500);
+    if (i % 10 == 0){
+      delay(25000);
+      Serial.println("mostrar");
+      delay(4000);
+    }
   }
 }
