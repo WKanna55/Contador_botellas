@@ -9,7 +9,7 @@ void loop(){
     Serial.println(i);
     Serial.println("mostrar");
     delay(2500);
-    if (i % 10 == 0){
+    if (i % 5 == 0){
       delay(25000);
       Serial.println("mostrar");
       delay(4000);

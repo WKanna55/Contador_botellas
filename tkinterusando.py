@@ -87,9 +87,8 @@ class ContadorBotellasApp:
 
     def cambiar_contador(self, num):
         self.contador = num
-        if self.parpadeo_activo:
-            self.ocultar_mensaje_bienvenida()
-            self.marco_principal.place(relx=0.02, rely=0.02, relwidth=0.95, relheight=0.95)
+        self.ocultar_mensaje_bienvenida()
+        self.marco_principal.place(relx=0.02, rely=0.02, relwidth=0.95, relheight=0.95)
         self.mostrar_animacion_botella()
         self.ventana.after(500, self.ocultar_animacion_botella)
 
@@ -128,9 +127,13 @@ class ContadorBotellasApp:
         
     def ocultar_interfaz(self):
         self.marco_principal.place_forget()
+        if hasattr(self, 'frame_bienvenida'):
+            self.frame_bienvenida.place_forget()
         self.ventana.configure(bg="black")
         self.pantalla_activa = False
-
+        self.iniciado_con_mostrar = False
+        self.parpadeo_activo = False  # Asegúrate de reiniciar esto también
+        
     def mostrar_interfaz(self):
         if not self.pantalla_activa:
             self.ventana.configure(bg="gray")
@@ -154,13 +157,12 @@ class ContadorBotellasApp:
         # Crear un nuevo frame que cubra toda la pantalla
         self.frame_bienvenida = tk.Frame(self.ventana, bg="darkgray")
         self.frame_bienvenida.place(relx=0, rely=0, relwidth=1, relheight=1)
-
-        if not self.mensaje_bienvenida:
-            self.mensaje_bienvenida = tk.Label(self.frame_bienvenida, 
-                                               text="¡Hola!\nIngrese botella por favor", 
-                                               font=self.fuente_titulo, 
-                                               fg="darkred", 
-                                               bg="darkgray")
+    
+        self.mensaje_bienvenida = tk.Label(self.frame_bienvenida, 
+                                           text="¡Hola!\nIngrese botella por favor", 
+                                           font=self.fuente_titulo, 
+                                           fg="darkred", 
+                                           bg="darkgray")
         self.mensaje_bienvenida.place(relx=0.5, rely=0.5, anchor="center")
         self.parpadeo_activo = True
         self.parpadear_mensaje()
@@ -200,9 +202,8 @@ def recibir_datos_serial(ser, app):
                 print(f"Recibido: {linea}")
                 
                 if linea.strip().lower() == "mostrar":
-                    if not app.pantalla_activa:
-                        app.iniciado_con_mostrar = True
-                        app.ventana.after(0, app.actividad_detectada)
+                    app.iniciado_con_mostrar = True
+                    app.ventana.after(0, app.actividad_detectada)
                     continue
                 
                 # Reiniciar el temporizador y mostrar la interfaz
